@@ -91,7 +91,7 @@ vim.g.mapleader = ' '
 vim.g.maplocalleader = ' '
 
 -- Set to true if you have a Nerd Font installed and selected in the terminal
-vim.g.have_nerd_font = false
+vim.g.have_nerd_font = true
 
 -- [[ Setting options ]]
 -- See `:help vim.opt`
@@ -189,6 +189,11 @@ vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right win
 vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
 vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
 
+-- [[ Custom Autocommands ]]
+-- Add code cell in quarto notebook
+
+vim.keymap.set({ 'n' }, '<localleader>p', '<esc>i```python<cr>```<esc>O', { desc = 'Add [p]ython code cell' })
+vim.keymap.set({ 'n' }, '<localleader>l', '<esc>i```text/latex<cr>```<esc>O', { desc = 'Add [l]atex code cell' })
 -- [[ Basic Autocommands ]]
 --  See `:help lua-guide-autocommands`
 
@@ -278,7 +283,6 @@ require('lazy').setup({
   --
   -- Then, because we use the `opts` key (recommended), the configuration runs
   -- after the plugin has been loaded as `require(MODULE).setup(opts)`.
-
   { -- Useful plugin to show you pending keybinds.
     'folke/which-key.nvim',
     event = 'VimEnter', -- Sets the loading event to 'VimEnter'
@@ -447,7 +451,58 @@ require('lazy').setup({
       end, { desc = '[S]earch [N]eovim files' })
     end,
   },
-
+  -- Comment out / in code
+  {
+    'numToStr/Comment.nvim',
+    opts = {
+      -- add any options here
+    },
+  },
+  -- Quarto
+  {
+    'quarto-dev/quarto-nvim',
+    dependencies = {
+      'jmbuhr/otter.nvim',
+      opts = {},
+      config = function()
+        require('otter').setup {
+          lsp = {
+            diagnostic_update_events = { 'BufWritePost', 'InsertLeave', 'TextChanged' },
+          },
+        }
+      end,
+    },
+    ft = { 'quarto', 'markdown' },
+  },
+  -- CodeCompanion
+  {
+    'olimorris/codecompanion.nvim',
+    config = true,
+    dependencies = {
+      'nvim-lua/plenary.nvim',
+      'nvim-treesitter/nvim-treesitter',
+    },
+  },
+  --Jupytext
+  { 'GCBallesteros/jupytext.nvim' },
+  -- Molten
+  {
+    'benlubas/molten-nvim',
+    version = '^1.0.0', -- use version <2.0.0 to avoid breaking changes
+    build = ':UpdateRemotePlugins',
+    init = function()
+      -- these are examples, not defaults. Please see the readme
+      vim.g.molten_output_win_max_height = 20
+      vim.g.molten_auto_image_popup = true
+      vim.g.molten_virt_lines_off_by_1 = true
+      vim.keymap.set('n', '<localleader>e', ':MoltenEvaluateOperator<CR>', { desc = 'evaluate operator', silent = true })
+      vim.keymap.set('n', '<localleader>os', ':noautocmd MoltenEnterOutput<CR>', { desc = 'open output window', silent = true })
+      vim.keymap.set('n', '<localleader>rr', ':MoltenReevaluateCell<CR>', { desc = 're-eval cell', silent = true })
+      vim.keymap.set('v', '<localleader>r', ':<C-u>MoltenEvaluateVisual<CR>gv', { desc = 'execute visual selection', silent = true })
+      vim.keymap.set('n', '<localleader>oh', ':MoltenHideOutput<CR>', { desc = 'close output window', silent = true })
+      vim.keymap.set('n', '<localleader>md', ':MoltenDelete<CR>', { desc = 'delete Molten cell', silent = true })
+    end,
+  },
   -- LSP Plugins
   {
     -- `lazydev` configures Lua LSP for your Neovim config, runtime and plugins
@@ -646,8 +701,9 @@ require('lazy').setup({
       --  When you add nvim-cmp, luasnip, etc. Neovim now has *more* capabilities.
       --  So, we create new capabilities with nvim cmp, and then broadcast that to the servers.
       local capabilities = vim.lsp.protocol.make_client_capabilities()
-      capabilities = vim.tbl_deep_extend('force', capabilities, require('cmp_nvim_lsp').default_capabilities())
+      capabilities = vim.tbl_deep_extend('force', capabilities, require('cmp_nvim_lsp').default_capabilities(), require('cmp_nvim_lsp').default_capabilities())
 
+      capabilities.workspace.didChangeWatchedFiles.dynamicRegistration = false
       -- Enable the following language servers
       --  Feel free to add/remove any LSPs that you want here. They will automatically be installed.
       --
@@ -659,8 +715,8 @@ require('lazy').setup({
       --        For example, to see the options for `lua_ls`, you could go to: https://luals.github.io/wiki/settings/
       local servers = {
         -- clangd = {},
-        -- gopls = {},
-        -- pyright = {},
+        gopls = {},
+        pyright = {},
         -- rust_analyzer = {},
         -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
         --
@@ -670,7 +726,14 @@ require('lazy').setup({
         -- But for many setups, the LSP (`ts_ls`) will work just fine
         -- ts_ls = {},
         --
+        -- pyright = {
 
+        --   python = {
+        --     analysis = {
+        --       offsetEncoding = 'utf-8',
+        --     },
+        --   },
+        -- },
         lua_ls = {
           -- cmd = { ... },
           -- filetypes = { ... },
@@ -722,7 +785,20 @@ require('lazy').setup({
       }
     end,
   },
-
+  -- {
+  --   'ray-x/lsp_signature.nvim',
+  --   event = 'InsertEnter',
+  --   config = function()
+  --     require('lsp_signature').setup {
+  --       bind = true,
+  --       floating_window = true,
+  --       hint_enable = false, -- Disable virtual text to avoid overlap with cmp
+  --       handler_opts = {
+  --         border = 'rounded', -- Match your cmp style
+  --       },
+  --     }
+  --   end,
+  -- },
   { -- Autoformat
     'stevearc/conform.nvim',
     event = { 'BufWritePre' },
@@ -758,7 +834,7 @@ require('lazy').setup({
       formatters_by_ft = {
         lua = { 'stylua' },
         -- Conform can also run multiple formatters sequentially
-        -- python = { "isort", "black" },
+        python = { 'isort', 'black' },
         --
         -- You can use 'stop_after_first' to run the first available formatter from the list
         -- javascript = { "prettierd", "prettier", stop_after_first = true },
@@ -838,9 +914,9 @@ require('lazy').setup({
 
           -- If you prefer more traditional completion keymaps,
           -- you can uncomment the following lines
-          --['<CR>'] = cmp.mapping.confirm { select = true },
-          --['<Tab>'] = cmp.mapping.select_next_item(),
-          --['<S-Tab>'] = cmp.mapping.select_prev_item(),
+          ['<CR>'] = cmp.mapping.confirm { select = true },
+          ['<Tab>'] = cmp.mapping.select_next_item(),
+          ['<S-Tab>'] = cmp.mapping.select_prev_item(),
 
           -- Manually trigger a completion from nvim-cmp.
           --  Generally you don't need this, because nvim-cmp will display
@@ -879,6 +955,7 @@ require('lazy').setup({
           { name = 'luasnip' },
           { name = 'path' },
           { name = 'nvim_lsp_signature_help' },
+          { name = 'otter' },
         },
       }
     end,
@@ -1019,6 +1096,139 @@ require('lazy').setup({
     },
   },
 })
+
+local quarto = require 'quarto'
+quarto.setup {
+  lspFeatures = {
+    -- NOTE: put whatever languages you want here:
+    languages = { 'r', 'python', 'rust' },
+    chunks = 'all',
+    diagnostics = {
+      enabled = true,
+      triggers = { 'BufWritePost', 'InsertLeave', 'TextChanged' },
+    },
+    completion = {
+      enabled = true,
+    },
+  },
+  -- keymap = {
+  --   -- NOTE: setup your own keymaps:
+  --   hover = 'H',
+  --   definition = 'gd',
+  --   rename = '<leader>rn',
+  --   references = 'gr',
+  --   format = '<leader>gf',
+  -- },
+  codeRunner = {
+    enabled = true,
+    default_method = 'molten',
+  },
+}
+
+local runner = require 'quarto.runner'
+vim.keymap.set('n', '<localleader>rc', runner.run_cell, { desc = 'run cell', silent = true })
+vim.keymap.set('n', '<localleader>ra', runner.run_above, { desc = 'run cell and above', silent = true })
+vim.keymap.set('n', '<localleader>rA', runner.run_all, { desc = 'run all cells', silent = true })
+vim.keymap.set('n', '<localleader>rl', runner.run_line, { desc = 'run line', silent = true })
+vim.keymap.set('v', '<localleader>r', runner.run_range, { desc = 'run visual range', silent = true })
+vim.keymap.set('n', '<localleader>RA', function()
+  runner.run_all(true)
+end, { desc = 'run all cells of all languages', silent = true })
+
+require('jupytext').setup {
+  custom_language_formatting = {
+    python = {
+      extension = 'md',
+      style = 'markdown',
+      force_ft = 'markdown',
+    },
+  },
+}
+-- Provide a command to create a blank new Python notebook
+-- note: the metadata is needed for Jupytext to understand how to parse the notebook.
+-- if you use another language than Python, you should change it in the template.
+local default_notebook = [[
+  {
+    "cells": [
+     {
+      "cell_type": "markdown",
+      "metadata": {},
+      "source": [
+        ""
+      ]
+     }
+    ],
+    "metadata": {
+     "kernelspec": {
+      "display_name": "Python 3",
+      "language": "python",
+      "name": "python3"
+     },
+     "language_info": {
+      "codemirror_mode": {
+        "name": "ipython"
+      },
+      "file_extension": ".py",
+      "mimetype": "text/x-python",
+      "name": "python",
+      "nbconvert_exporter": "python",
+      "pygments_lexer": "ipython3"
+     }
+    },
+    "nbformat": 4,
+    "nbformat_minor": 5
+  }
+]]
+
+local function new_notebook(filename)
+  local path = filename .. '.ipynb'
+  local file = io.open(path, 'w')
+  if file then
+    file:write(default_notebook)
+    file:close()
+    vim.cmd('edit ' .. path)
+  else
+    print 'Error: Could not open new notebook file for writing.'
+  end
+end
+
+vim.api.nvim_create_user_command('NewNotebook', function(opts)
+  new_notebook(opts.args)
+end, {
+  nargs = 1,
+  complete = 'file',
+})
+-- CodeCompanion
+require('codecompanion').setup {
+  strategies = {
+    chat = {
+      adapter = 'stablecode',
+    },
+    inline = {
+      adapter = 'stablecode',
+    },
+  },
+  adapters = {
+    stablecode = function()
+      return require('codecompanion.adapters').extend('ollama', {
+        name = 'stable-code:3b', -- Give this adapter a different name to differentiate it from the default ollama adapter
+        schema = {
+          model = {
+            default = 'stable-code:3b',
+          },
+          num_ctx = {
+            default = 4096,
+          },
+          num_predict = {
+            default = -1,
+          },
+        },
+      })
+    end,
+  },
+}
+vim.keymap.set('n', '<localleader>ci', ':CodeCompanion ', { desc = 'Open Code Companion inline command' })
+vim.keymap.set('n', '<localleader>cc', ':CodeCompanionChat<CR>', { desc = 'Open Code Companion chat' })
 
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et

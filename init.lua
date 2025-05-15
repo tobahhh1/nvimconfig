@@ -109,6 +109,11 @@ vim.opt.mouse = 'a'
 
 -- Don't show the mode, since it's already in the status line
 vim.opt.showmode = false
+-- Indent settings --
+vim.opt.shiftwidth = 2
+vim.opt.tabstop = 2
+vim.opt.expandtab = true
+vim.opt.autoindent = true
 
 -- Sync clipboard between OS and Neovim.
 --  Schedule the setting after `UiEnter` because it can increase startup-time.
@@ -175,10 +180,10 @@ vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagn
 vim.keymap.set('t', '<Esc><Esc>', '<C-\\><C-n>', { desc = 'Exit terminal mode' })
 
 -- TIP: Disable arrow keys in normal mode
--- vim.keymap.set('n', '<left>', '<cmd>echo "Use h to move!!"<CR>')
--- vim.keymap.set('n', '<right>', '<cmd>echo "Use l to move!!"<CR>')
--- vim.keymap.set('n', '<up>', '<cmd>echo "Use k to move!!"<CR>')
--- vim.keymap.set('n', '<down>', '<cmd>echo "Use j to move!!"<CR>')
+vim.keymap.set('n', '<left>', '<cmd>echo "Use h to move!!"<CR>')
+vim.keymap.set('n', '<right>', '<cmd>echo "Use l to move!!"<CR>')
+vim.keymap.set('n', '<up>', '<cmd>echo "Use k to move!!"<CR>')
+vim.keymap.set('n', '<down>', '<cmd>echo "Use j to move!!"<CR>')
 
 -- Keybinds to make split navigation easier.
 --  Use CTRL+<hjkl> to switch between windows
@@ -188,12 +193,19 @@ vim.keymap.set('n', '<C-h>', '<C-w><C-h>', { desc = 'Move focus to the left wind
 vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right window' })
 vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
 vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
-
 -- [[ Custom Autocommands ]]
 -- Add code cell in quarto notebook
 
-vim.keymap.set({ 'n' }, '<localleader>p', '<esc>i```python<cr>```<esc>O', { desc = 'Add [p]ython code cell' })
-vim.keymap.set({ 'n' }, '<localleader>l', '<esc>i```text/latex<cr>```<esc>O', { desc = 'Add [l]atex code cell' })
+vim.keymap.set({ 'n' }, '<localleader>mp', '<esc>i```python<cr>```<esc>O', { desc = 'Add [m]olten [p]ython code cell' })
+
+vim.keymap.set({ 'n', 'v' }, '<localleader>mj', ':MoltenNext<cr>', { desc = 'Go to next [m]olten cell' })
+
+vim.keymap.set({ 'n', 'v' }, '<localleader>mk', ':MoltenPrev<cr>', { desc = 'Go to previous [m]olten cell' })
+
+vim.keymap.set({ 'n' }, '<localleader>mv', ':MoltenPrev<cr>:MoltenNext<cr>v/```<cr>k$', { desc = 'Match [m]olten cell in [v]isual mode' })
+
+vim.keymap.set('n', '<leader>p', ':Telescope file_browser path=%:p:h select_buffer=true<CR><esc>', { desc = 'Search files' })
+
 -- [[ Basic Autocommands ]]
 --  See `:help lua-guide-autocommands`
 
@@ -347,6 +359,10 @@ require('lazy').setup({
   --
   -- Use the `dependencies` key to specify the dependencies of a particular plugin
 
+  {
+    'nvim-telescope/telescope-file-browser.nvim',
+    dependencies = { 'nvim-telescope/telescope.nvim', 'nvim-lua/plenary.nvim' },
+  },
   { -- Fuzzy Finder (files, lsp, etc)
     'nvim-telescope/telescope.nvim',
     event = 'VimEnter',
@@ -483,6 +499,16 @@ require('lazy').setup({
       'nvim-treesitter/nvim-treesitter',
     },
   },
+  -- Markdown Preview --
+  {
+    'iamcco/markdown-preview.nvim',
+    cmd = { 'MarkdownPreviewToggle', 'MarkdownPreview', 'MarkdownPreviewStop' },
+    build = 'cd app && yarn install',
+    init = function()
+      vim.g.mkdp_filetypes = { 'markdown', 'jupyter' }
+    end,
+    ft = { 'markdown', 'jupyter' },
+  },
   --Jupytext
   { 'GCBallesteros/jupytext.nvim' },
   -- Molten
@@ -496,11 +522,62 @@ require('lazy').setup({
       vim.g.molten_auto_image_popup = true
       vim.g.molten_virt_lines_off_by_1 = true
       vim.keymap.set('n', '<localleader>e', ':MoltenEvaluateOperator<CR>', { desc = 'evaluate operator', silent = true })
-      vim.keymap.set('n', '<localleader>os', ':noautocmd MoltenEnterOutput<CR>', { desc = 'open output window', silent = true })
+      vim.keymap.set('n', '<localleader>os', '/```<CR>k:noautocmd MoltenEnterOutput<CR>', { desc = 'open output window', silent = true })
       vim.keymap.set('n', '<localleader>rr', ':MoltenReevaluateCell<CR>', { desc = 're-eval cell', silent = true })
       vim.keymap.set('v', '<localleader>r', ':<C-u>MoltenEvaluateVisual<CR>gv', { desc = 'execute visual selection', silent = true })
       vim.keymap.set('n', '<localleader>oh', ':MoltenHideOutput<CR>', { desc = 'close output window', silent = true })
       vim.keymap.set('n', '<localleader>md', ':MoltenDelete<CR>', { desc = 'delete Molten cell', silent = true })
+
+      -- automatically import output chunks from a jupyter notebook
+      -- tries to find a kernel that matches the kernel in the jupyter notebook
+      -- falls back to a kernel that matches the name of the active venv (if any)
+      local imb = function(e) -- init molten buffer
+        vim.schedule(function()
+          local kernels = vim.fn.MoltenAvailableKernels()
+          local try_kernel_name = function()
+            local metadata = vim.json.decode(io.open(e.file, 'r'):read 'a')['metadata']
+            return metadata.kernelspec.name
+          end
+          local ok, kernel_name = pcall(try_kernel_name)
+          if not ok or not vim.tbl_contains(kernels, kernel_name) then
+            kernel_name = nil
+            local venv = os.getenv 'VIRTUAL_ENV' or os.getenv 'CONDA_PREFIX'
+            if venv ~= nil then
+              kernel_name = string.match(venv, '/.+/(.+)')
+            end
+          end
+          if kernel_name ~= nil and vim.tbl_contains(kernels, kernel_name) then
+            vim.cmd(('MoltenInit %s'):format(kernel_name))
+          end
+          vim.cmd 'MoltenImportOutput'
+        end)
+      end
+
+      -- automatically import output chunks from a jupyter notebook
+      vim.api.nvim_create_autocmd('BufAdd', {
+        pattern = { '*.ipynb' },
+        callback = imb,
+      })
+
+      -- we have to do this as well so that we catch files opened like nvim ./hi.ipynb
+      vim.api.nvim_create_autocmd('BufEnter', {
+        pattern = { '*.ipynb' },
+        callback = function(e)
+          if vim.api.nvim_get_vvar 'vim_did_enter' ~= 1 then
+            imb(e)
+          end
+        end,
+      })
+
+      -- automatically export output chunks to a jupyter notebook on write
+      vim.api.nvim_create_autocmd('BufWritePost', {
+        pattern = { '*.ipynb' },
+        callback = function()
+          if require('molten.status').initialized() == 'Molten' then
+            vim.cmd 'MoltenExportOutput!'
+          end
+        end,
+      })
     end,
   },
   -- LSP Plugins
@@ -701,7 +778,7 @@ require('lazy').setup({
       --  When you add nvim-cmp, luasnip, etc. Neovim now has *more* capabilities.
       --  So, we create new capabilities with nvim cmp, and then broadcast that to the servers.
       local capabilities = vim.lsp.protocol.make_client_capabilities()
-      capabilities = vim.tbl_deep_extend('force', capabilities, require('cmp_nvim_lsp').default_capabilities(), require('cmp_nvim_lsp').default_capabilities())
+      capabilities = vim.tbl_deep_extend('force', capabilities, require('cmp_nvim_lsp').default_capabilities())
 
       capabilities.workspace.didChangeWatchedFiles.dynamicRegistration = false
       -- Enable the following language servers
@@ -717,6 +794,7 @@ require('lazy').setup({
         -- clangd = {},
         gopls = {},
         pyright = {},
+        ruff = {},
         -- rust_analyzer = {},
         -- ... etc. See `:help lspconfig-all` for a list of all the pre-configured LSPs
         --
@@ -726,14 +804,6 @@ require('lazy').setup({
         -- But for many setups, the LSP (`ts_ls`) will work just fine
         -- ts_ls = {},
         --
-        -- pyright = {
-
-        --   python = {
-        --     analysis = {
-        --       offsetEncoding = 'utf-8',
-        --     },
-        --   },
-        -- },
         lua_ls = {
           -- cmd = { ... },
           -- filetypes = { ... },
@@ -785,20 +855,6 @@ require('lazy').setup({
       }
     end,
   },
-  -- {
-  --   'ray-x/lsp_signature.nvim',
-  --   event = 'InsertEnter',
-  --   config = function()
-  --     require('lsp_signature').setup {
-  --       bind = true,
-  --       floating_window = true,
-  --       hint_enable = false, -- Disable virtual text to avoid overlap with cmp
-  --       handler_opts = {
-  --         border = 'rounded', -- Match your cmp style
-  --       },
-  --     }
-  --   end,
-  -- },
   { -- Autoformat
     'stevearc/conform.nvim',
     event = { 'BufWritePre' },
@@ -834,7 +890,7 @@ require('lazy').setup({
       formatters_by_ft = {
         lua = { 'stylua' },
         -- Conform can also run multiple formatters sequentially
-        python = { 'isort', 'black' },
+        python = { 'ruff' },
         --
         -- You can use 'stop_after_first' to run the first available formatter from the list
         -- javascript = { "prettierd", "prettier", stop_after_first = true },
@@ -878,6 +934,9 @@ require('lazy').setup({
       'hrsh7th/cmp-nvim-lsp',
       'hrsh7th/cmp-path',
       'hrsh7th/cmp-nvim-lsp-signature-help',
+      'hrsh7th/cmp-buffer',
+      'hrsh7th/cmp-path',
+      'hrsh7th/cmp-cmdline',
     },
     config = function()
       -- See `:help cmp`
@@ -954,7 +1013,6 @@ require('lazy').setup({
           { name = 'nvim_lsp' },
           { name = 'luasnip' },
           { name = 'path' },
-          { name = 'nvim_lsp_signature_help' },
           { name = 'otter' },
         },
       }
@@ -997,7 +1055,7 @@ require('lazy').setup({
       --  - ci'  - [C]hange [I]nside [']quote
       require('mini.ai').setup { n_lines = 500 }
 
-      -- Add/delete/replace surroundings (brackets, quotes, etc.)
+      -- Add/delete/replace surroundings(brackets, quotes, etc.)
       --
       -- - saiw) - [S]urround [A]dd [I]nner [W]ord [)]Paren
       -- - sd'   - [S]urround [D]elete [']quotes
@@ -1198,37 +1256,110 @@ end, {
   nargs = 1,
   complete = 'file',
 })
+
+local model_config_path = vim.fn.stdpath 'config' .. '/ollama_model.txt'
+
+local function save_ollama_adapter_schema(model, num_ctx)
+  local file = io.open(model_config_path, 'w')
+  if file then
+    file:write(model, '\n')
+    file:write(num_ctx, '\n')
+    file:close()
+  end
+end
+
+local function load_ollama_adapter_schema()
+  local file = io.open(model_config_path, 'r')
+  if file then
+    local model = file:read '*l'
+    local num_ctx = tonumber(file:read '*l')
+    file:close()
+    return {
+      model = {
+        default = model,
+      },
+      num_ctx = {
+        default = num_ctx,
+      },
+      num_predict = {
+        default = -1,
+      },
+    }
+  end
+  return {
+    model = {
+      default = 'stable-code:3b',
+    },
+    num_ctx = {
+      default = 4096,
+    },
+    num_predict = {
+      default = -1,
+    },
+  }
+end
+
+local function load_codecompanion_config()
+  return {
+    strategies = {
+      chat = {
+        adapter = 'curr_adapter',
+      },
+      inline = {
+        adapter = 'curr_adapter',
+      },
+    },
+    adapters = {
+      curr_adapter = function()
+        return require('codecompanion.adapters').extend('ollama', {
+          name = 'curr_adapter', -- Give this adapter a different name to differentiate it from the default ollama adapter
+          schema = load_ollama_adapter_schema(),
+        })
+      end,
+    },
+  }
+end
+
 -- CodeCompanion
-require('codecompanion').setup {
-  strategies = {
-    chat = {
-      adapter = 'stablecode',
-    },
-    inline = {
-      adapter = 'stablecode',
-    },
-  },
-  adapters = {
-    stablecode = function()
-      return require('codecompanion.adapters').extend('ollama', {
-        name = 'stable-code:3b', -- Give this adapter a different name to differentiate it from the default ollama adapter
-        schema = {
-          model = {
-            default = 'stable-code:3b',
-          },
-          num_ctx = {
-            default = 4096,
-          },
-          num_predict = {
-            default = -1,
-          },
-        },
-      })
-    end,
-  },
-}
-vim.keymap.set('n', '<localleader>ci', ':CodeCompanion ', { desc = 'Open Code Companion inline command' })
-vim.keymap.set('n', '<localleader>cc', ':CodeCompanionChat<CR>', { desc = 'Open Code Companion chat' })
+local model = load_ollama_adapter_schema().model.default
+local num_ctx = load_ollama_adapter_schema().num_ctx.default
+require('codecompanion').setup(load_codecompanion_config())
+
+vim.api.nvim_create_user_command('CodeCompanionSetModel', function(opts)
+  model = opts.args
+  save_ollama_adapter_schema(model, num_ctx)
+  require('codecompanion').setup(load_codecompanion_config())
+end, { nargs = 1 })
+
+vim.api.nvim_create_user_command('CodeCompanionSetNumCtx', function(opts)
+  num_ctx = tostring(opts.args)
+  save_ollama_adapter_schema(model, num_ctx)
+  require('codecompanion').setup(load_codecompanion_config())
+end, { nargs = 1 })
+
+vim.keymap.set('n', '<leader>ci', ':CodeCompanion ', { desc = 'Open Code Companion inline command' })
+vim.keymap.set('n', '<leader>cc', ':CodeCompanionChat<CR>', { desc = 'Open Code Companion chat' })
+vim.api.nvim_create_autocmd('CursorHold', {
+  pattern = '*',
+  callback = function()
+    vim.diagnostic.open_float(nil, { focus = false })
+  end,
+})
 
 -- The line beneath this is called `modeline`. See `:help modeline`
 -- vim: ts=2 sts=2 sw=2 et
+--
+
+-- Enter telescope file browser on enter
+vim.api.nvim_create_autocmd('VimEnter', {
+  callback = function()
+    local args = vim.fn.argv()
+
+    -- Check if a file was provided as an argument
+    if #args == 0 then
+      local cwd = vim.fn.getcwd() -- Get current working directory
+      require('telescope').extensions.file_browser.file_browser { path = cwd }
+      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<Esc>', true, false, true), 'n', true)
+    end
+  end,
+})

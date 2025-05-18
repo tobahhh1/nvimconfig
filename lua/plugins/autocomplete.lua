@@ -114,6 +114,7 @@ return { -- Autocompletion
         { name = 'luasnip' },
         { name = 'path' },
         { name = 'otter' },
+        { name = 'nvim_lsp_signature_help' },
       },
     }
   end,

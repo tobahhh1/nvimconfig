@@ -81,7 +81,10 @@ return {
             require('telescope.themes').get_dropdown(),
           },
           file_browser = {
-            require,
+            mappings = {
+              ['i'] = {},
+              ['n'] = {},
+            },
           },
         },
       }

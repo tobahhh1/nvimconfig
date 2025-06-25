@@ -1,19 +1,5 @@
 -- TELESCOPE FUZZY FINDER CONFIG --
 
--- Enter telescope file browser on enter
-vim.api.nvim_create_autocmd('VimEnter', {
-  callback = function()
-    local args = vim.fn.argv()
-
-    -- Check if a file was provided as an argument
-    if #args == 0 then
-      local cwd = vim.fn.getcwd() -- Get current working directory
-      require('telescope').extensions.file_browser.file_browser { path = cwd }
-      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<Esc>', true, false, true), 'n', true)
-    end
-  end,
-})
-
 return {
   { -- Telescope file browser (fuzzy finder)
     'nvim-telescope/telescope-file-browser.nvim',

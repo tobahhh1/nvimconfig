@@ -73,7 +73,9 @@ local open_file_nvim_tree = function()
     -- Weird jank but have to do this to get the LSP to start
     -- TODO find out why the hell this is the case
     open_in_nvim_tree_preview()
-    vim.api.nvim_win_close(_G.nvim_tree_preview_win_id, false)
+    if _G.nvim_tree_preview_win_id then
+      vim.api.nvim_win_close(_G.nvim_tree_preview_win_id, false)
+    end
   end
 
   api.node.open.edit(node)

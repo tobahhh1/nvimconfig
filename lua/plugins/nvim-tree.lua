@@ -26,9 +26,6 @@ return {
           local row = math.floor((win_height - height) / 2 - 1)
           local col = math.floor((win_width - width) / 2)
 
-          -- Create a new empty buffer (scratch)
-          local buf = vim.api.nvim_create_buf(false, true)
-
           -- Open the floating window
           local win = {
             relative = 'win',
@@ -47,9 +44,19 @@ return {
         return math.floor(vim.api.nvim_win_get_width(0) * WIDTH_RATIO)
       end,
     },
+    disable_netrw = true,
+    hijack_netrw = true,
+    respect_buf_cwd = true,
+    sync_root_with_cwd = true,
+    on_attach = function(bufnr)
+      local api = require 'nvim-tree.api'
+
+      local function opts(desc)
+        return { desc = 'nvim-tree: ' .. desc, buffer = bufnr, noremap = true, silent = true, nowait = true }
+      end
+
+      vim.keymap.set('n', '<Esc>', api.tree.close, opts 'Close neotree')
+      api.config.mappings.default_on_attach(bufnr)
+    end,
   },
-  disable_netrw = true,
-  hijack_netrw = true,
-  respect_buf_cwd = true,
-  sync_root_with_cwd = true,
 }

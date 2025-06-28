@@ -17,33 +17,52 @@ local get_nvim_tree_window_dimensions = function()
   return col, row, width, height
 end
 
+local open_preview_window = function(preview_buf)
+  if not _G.nvim_tree_preview_win_id then
+    local x, y, width, height = get_nvim_tree_window_dimensions()
+
+    local preview_width = math.floor(width * PREVIEW_WIDTH_RATIO)
+    local preview_x = math.floor(x + (width - preview_width))
+
+    if not preview_buf then
+      preview_buf = vim.api.nvim_create_buf(false, true)
+    end
+    local preview_win_id = vim.api.nvim_open_win(preview_buf, false, {
+      relative = 'win',
+      win = 0,
+      width = preview_width,
+      height = height,
+      row = y,
+      col = preview_x,
+      border = 'rounded',
+    })
+    _G.nvim_tree_preview_buf_id = preview_buf
+    _G.nvim_tree_preview_win_id = preview_win_id
+  end
+end
+
+local close_preview_window = function()
+  if _G.nvim_tree_preview_win_id then
+    vim.api.nvim_win_close(_G.nvim_tree_preview_win_id, true)
+    _G.nvim_tree_preview_win_id = nil
+    if _G.nvim_tree_preview_buf_id and vim.api.nvim_buf_is_valid(_G.nvim_tree_preview_buf_id) then
+      vim.api.nvim_buf_delete(_G.nvim_tree_preview_buf_id, { force = true })
+    end
+    _G.nvim_tree_preview_buf_id = nil
+  else
+    print 'Attempted to close preview window, but none exists'
+  end
+end
+
 local open_nvim_tree = function()
+  open_preview_window()
   local api = require 'nvim-tree.api'
-
-  local x, y, width, height = get_nvim_tree_window_dimensions()
-
-  local preview_width = math.floor(width * PREVIEW_WIDTH_RATIO)
-  local preview_x = math.floor(x + (width - preview_width))
-
-  local preview_buf = vim.api.nvim_create_buf(false, true)
-  local preview_win_id = vim.api.nvim_open_win(preview_buf, false, {
-    relative = 'win',
-    win = 0,
-    width = preview_width,
-    height = height,
-    row = y,
-    col = preview_x,
-    border = 'rounded',
-  })
-  _G.nvim_tree_preview_buf_id = preview_buf
-  _G.nvim_tree_preview_win_id = preview_win_id
-
   api.tree.open()
 end
 
 local close_nvim_tree = function()
   local api = require 'nvim-tree.api'
-  vim.api.nvim_win_close(_G.nvim_tree_preview_win_id, false)
+  close_preview_window()
   api.tree.close()
 end
 
@@ -52,36 +71,64 @@ local open_in_nvim_tree_preview = function()
   local node = api.tree.get_node_under_cursor()
 
   if node and node.type == 'file' then
-    -- Check if your floating window still exists
+    -- Check if preview window still exists
     if _G.nvim_tree_preview_win_id and vim.api.nvim_win_is_valid(_G.nvim_tree_preview_win_id) then
-      -- Switch to the floating window and open the file
-      vim.api.nvim_win_call(_G.nvim_tree_preview_win_id, function()
-        vim.cmd('edit ' .. node.absolute_path)
+      preview_buf = vim.api.nvim_create_buf(false, true)
+
+      -- Set buffer options to make it read-only and temporary
+      vim.api.nvim_buf_set_option(preview_buf, 'bufhidden', 'wipe')
+      vim.api.nvim_buf_set_option(preview_buf, 'swapfile', false)
+      vim.api.nvim_buf_set_option(preview_buf, 'modifiable', false)
+      vim.api.nvim_win_set_buf(_G.nvim_tree_preview_win_id, preview_buf)
+      if _G.nvim_tree_preview_buf_id and vim.api.nvim_buf_is_valid(_G.nvim_tree_preview_buf_id) then
+        vim.api.nvim_buf_delete(_G.nvim_tree_preview_buf_id, { force = true })
+      end
+      _G.nvim_tree_preview_buf_id = preview_buf
+
+      local success, lines = pcall(function()
+        local file = io.open(node.absolute_path, 'r')
+        if not file then
+          error('Could not open file: ' .. node.absolute_path)
+        end
+        local content = file:read '*all'
+        file:close()
+        return vim.split(content, '\n')
       end)
+      if success then
+        -- Make buffer modifiable temporarily to set content
+        vim.api.nvim_buf_set_option(preview_buf, 'modifiable', true)
+        vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, lines)
+        vim.api.nvim_buf_set_option(preview_buf, 'modifiable', false)
+
+        -- Set filetype for syntax highlighting
+        local filetype = vim.filetype.match { filename = node.absolute_path }
+        if filetype then
+          vim.api.nvim_buf_set_option(preview_buf, 'filetype', filetype)
+        end
+      else
+        -- Handle file read error
+        vim.api.nvim_buf_set_option(preview_buf, 'modifiable', true)
+        vim.api.nvim_buf_set_lines(preview_buf, 0, -1, false, { 'Error: ' .. lines })
+        vim.api.nvim_buf_set_option(preview_buf, 'modifiable', false)
+      end
     else
       print 'Floating window no longer exists'
     end
   end
 end
+
 local open_file_nvim_tree = function()
   local api = require 'nvim-tree.api'
   local node = api.tree.get_node_under_cursor()
-  local tmp_window = vim.api.nvim_get_current_win()
 
   -- Close preview window if we are opening a file
   if node and node.type == 'file' then
-    -- Weird jank but have to do this to get the LSP to start
-    -- TODO find out why the hell this is the case
-    open_in_nvim_tree_preview()
-    if _G.nvim_tree_preview_win_id then
-      vim.api.nvim_win_close(_G.nvim_tree_preview_win_id, false)
-    end
+    close_preview_window()
   end
 
   api.node.open.edit(node)
-
   if node and node.type == 'file' then
-    vim.api.nvim_win_close(tmp_window, false)
+    api.tree.close()
   end
 end
 

@@ -31,13 +31,17 @@ vim.keymap.set('n', '<C-l>', '<C-w><C-l>', { desc = 'Move focus to the right win
 vim.keymap.set('n', '<C-j>', '<C-w><C-j>', { desc = 'Move focus to the lower window' })
 vim.keymap.set('n', '<C-k>', '<C-w><C-k>', { desc = 'Move focus to the upper window' })
 
--- [[Plugin - Specific Keymaps]] -- 
+-- [[Plugin - Specific Keymaps]] --
 
--- NOTE: Might want to move these to a different file as they will be confusing to find.
-
-
--- Molten --
 vim.keymap.set({ 'n' }, '<localleader>mp', '<esc>i```python<cr>```<esc>O', { desc = 'Add [m]olten [p]ython code cell' })
+-- CodeCompanion Chat --
+vim.keymap.set('n', '<leader>cc', '<cmd>CodeCompanionChat<CR>', { desc = 'Open CodeCompanion Chat' })
+
+-- CodeCompanion Inline Chat --
+vim.keymap.set('n', '<leader>ci', '<cmd>CodeCompanionInlineChat<CR>', { desc = 'Open CodeCompanion Inline Chat' })
+
+-- CodeCompanion Actions --
+vim.keymap.set('n', '<leader>cpa', '<cmd>CodeCompanionActions<CR>', { desc = 'Run CodeCompanion Actions' })
 
 vim.keymap.set({ 'n', 'v' }, '<localleader>mj', ':MoltenNext<cr>', { desc = 'Go to next [m]olten cell' })
 
@@ -45,7 +49,5 @@ vim.keymap.set({ 'n', 'v' }, '<localleader>mk', ':MoltenPrev<cr>', { desc = 'Go 
 
 vim.keymap.set({ 'n' }, '<localleader>mv', ':MoltenPrev<cr>:MoltenNext<cr>v/```<cr>k$', { desc = 'Match [m]olten cell in [v]isual mode' })
 
-
 -- Open telescope file browser --
 vim.keymap.set('n', '<leader>p', ':Telescope file_browser path=%:p:h select_buffer=true<CR><esc>', { desc = 'Search files' })
-

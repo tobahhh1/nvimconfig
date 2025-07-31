@@ -1,10 +1,6 @@
 -- TELESCOPE FUZZY FINDER CONFIG --
 
 return {
-  { -- Telescope file browser (fuzzy finder)
-    'nvim-telescope/telescope-file-browser.nvim',
-    dependencies = { 'nvim-telescope/telescope.nvim', 'nvim-lua/plenary.nvim' },
-  },
   { -- Fuzzy Finder (files, lsp, etc)
 
     'nvim-telescope/telescope.nvim',
@@ -62,6 +58,11 @@ return {
         --   },
         -- },
         -- pickers = {}
+        defaults = {
+
+          path_display = { 'truncate' },
+        },
+
         extensions = {
           ['ui-select'] = {
             require('telescope.themes').get_dropdown(),

@@ -59,8 +59,16 @@ return {
         -- },
         -- pickers = {}
         defaults = {
-
+          layout_strategy = 'vertical',
+          layout_config = {
+            anchor = 'E', -- Positions on the right
+            width = 0.35, -- 40% of screen width
+            height = 0.95, -- 80% of screen height
+            prompt_position = 'top',
+            mirror = true,
+          },
           path_display = { 'truncate' },
+          sorting_strategy = 'ascending',
         },
 
         extensions = {
@@ -99,6 +107,9 @@ return {
         builtin.current_buffer_fuzzy_find(require('telescope.themes').get_dropdown {
           winblend = 10,
           previewer = false,
+          layout_config = {
+            anchor = 'CENTER',
+          },
         })
       end, { desc = '[/] Fuzzily search in current buffer' })
 
